@@ -9,6 +9,7 @@ Handles:
 import hashlib
 import hmac
 import logging
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,11 +28,16 @@ _SECRET_CACHE_TTL = 300  # 5 minutes
 
 
 def get_webhook_secret(instance_dir: Path) -> str | None:
-    """Load the GitHub webhook secret from GSM via credential_vault (cached 5 min)."""
+    """Load the GitHub webhook secret from env var or GSM (cached 5 min)."""
     global _webhook_secret_cache
     cached_value, cached_at = _webhook_secret_cache
     if cached_value and (time.time() - cached_at) < _SECRET_CACHE_TTL:
         return cached_value
+
+    env_secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
+    if env_secret:
+        _webhook_secret_cache = (env_secret, time.time())
+        return env_secret
 
     try:
         from app.credential_vault.helpers import get_gsm
