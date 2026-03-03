@@ -15,7 +15,28 @@ def get_config():
 
 def get_gsm():
     from app.credential_vault.gsm_client import GSMClient
-    return GSMClient.from_config(get_config())
+    try:
+        from app.circuit_breakers import get_breaker
+        breaker = get_breaker("google_secret_manager")
+        return _GSMWithBreaker(GSMClient.from_config(get_config()), breaker)
+    except ImportError:
+        return GSMClient.from_config(get_config())
+
+
+class _GSMWithBreaker:
+    """Wrapper around GSMClient that uses a circuit breaker."""
+
+    def __init__(self, client, breaker):
+        self._client = client
+        self._breaker = breaker
+
+    def __getattr__(self, name):
+        attr = getattr(self._client, name)
+        if callable(attr):
+            def wrapped(*args, **kwargs):
+                return self._breaker.call(attr, *args, **kwargs)
+            return wrapped
+        return attr
 
 
 def get_vault_config():

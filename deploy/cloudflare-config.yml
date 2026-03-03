@@ -1,0 +1,12 @@
+# Cloudflare Tunnel configuration for AI Governor
+# Replace <TUNNEL-UUID> with the actual tunnel ID after creation:
+#   cloudflared tunnel create ai-governor
+#   cloudflared tunnel route dns ai-governor governor.yourart.art
+
+tunnel: <TUNNEL-UUID>
+credentials-file: /Users/admin/.cloudflared/<TUNNEL-UUID>.json
+
+ingress:
+  - hostname: governor.yourart.art
+    service: http://localhost:5001
+  - service: http_status:404

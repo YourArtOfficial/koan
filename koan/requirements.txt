@@ -9,3 +9,9 @@ pyyaml>=6.0
 google-cloud-secret-manager>=2.20.0
 google-cloud-logging>=3.10.0
 detect-secrets>=1.5.0
+
+# Watcher (005-watcher-github-gitlab)
+python-gitlab>=4.0.0
+
+# Integration POC (007-integration-poc)
+pybreaker>=1.2.0

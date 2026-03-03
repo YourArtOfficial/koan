@@ -14,9 +14,13 @@ from pathlib import Path
 
 from flask import Response, request
 
+import logging
+
 from app.budget_controller.alert_formatter import format_alert
 from app.journal import append_to_journal
 from app.utils import append_to_outbox, load_config
+
+logger = logging.getLogger("budget_controller.webhook")
 
 
 def register_webhook(app, instance_dir: Path):

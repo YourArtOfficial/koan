@@ -65,6 +65,20 @@ try:
 except ImportError:
     pass  # budget_controller not installed
 
+# Register watcher webhook routes
+try:
+    from app.watcher.webhook_handler import register_webhooks
+    register_webhooks(app, INSTANCE_DIR)
+except ImportError:
+    pass  # watcher not installed
+
+# Register governor health check blueprint
+try:
+    from app.health import health_bp
+    app.register_blueprint(health_bp)
+except ImportError:
+    pass  # health module not installed
+
 
 # ---------------------------------------------------------------------------
 # Helpers

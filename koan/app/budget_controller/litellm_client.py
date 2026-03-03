@@ -41,9 +41,22 @@ class LiteLLMClient:
         url = f"{self.base_url}{path}"
         kwargs.setdefault("headers", self._headers())
         kwargs.setdefault("timeout", self.timeout)
-        resp = requests.request(method, url, **kwargs)
+
+        breaker = self._get_breaker()
+        if breaker:
+            resp = breaker.call(requests.request, method, url, **kwargs)
+        else:
+            resp = requests.request(method, url, **kwargs)
         resp.raise_for_status()
         return resp.json()
+
+    @staticmethod
+    def _get_breaker():
+        try:
+            from app.circuit_breakers import get_breaker
+            return get_breaker("litellm")
+        except ImportError:
+            return None
 
     # --- Health ---
 

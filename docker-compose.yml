@@ -43,10 +43,14 @@ services:
     restart: unless-stopped
     depends_on:
       - litellm-proxy
-    # No ports exposed by default — Telegram/Slack only
-    # Uncomment to expose dashboard:
-    # ports:
-    #   - "5001:5001"
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # =========================================================================
   # LiteLLM Proxy — Budget Controller

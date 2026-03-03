@@ -70,6 +70,79 @@ from app.utils import (
 )
 
 
+_last_report_date = None
+
+
+def _check_governor_report():
+    """Check if a periodic governor report should be sent."""
+    global _last_report_date
+    try:
+        from app.utils import load_config
+
+        config = load_config()
+        gov_config = config.get("governor", {}).get("report", {})
+        if not gov_config.get("enabled"):
+            return
+
+        now = datetime.now()
+        today = now.date()
+
+        if _last_report_date == today:
+            return
+
+        target_hour = gov_config.get("hour", 9)
+        if now.hour != target_hour:
+            return
+
+        frequency = gov_config.get("frequency", "weekly")
+        target_day = gov_config.get("day", "monday").lower()
+
+        days_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+                    "friday": 4, "saturday": 5, "sunday": 6}
+
+        if frequency == "weekly" and now.weekday() != days_map.get(target_day, 0):
+            return
+        elif frequency == "monthly" and now.day != 1:
+            return
+
+        _last_report_date = today
+
+        from app.report_generator import generate_report
+        from app.utils import append_to_outbox
+        from datetime import timedelta
+
+        if frequency == "weekly":
+            period_start = today - timedelta(days=7)
+        elif frequency == "monthly":
+            period_start = today - timedelta(days=30)
+        else:
+            period_start = today - timedelta(days=1)
+
+        report = generate_report(period_start, today)
+
+        lines = [
+            f"📋 **Rapport Governor — {period_start} au {today}**",
+            f"Événements: {report.get('events_count', 0)}",
+            f"Détections: {report.get('detections_count', 0)}",
+            f"Taux FP: {report.get('false_positive_rate', 0):.0%}",
+            f"Budget: {report.get('budget_total', 0):.0f}€",
+            f"Alertes credentials: {report.get('credential_alerts', 0)}",
+        ]
+
+        top = report.get("top_citizens", [])
+        if top:
+            lines.append("Top: " + ", ".join(
+                f"{c['login']}({c['events']})" for c in top[:3]
+            ))
+
+        append_to_outbox(OUTBOX_FILE, "\n" + "\n".join(lines) + "\n")
+        log("report", f"Governor periodic report sent for {period_start} to {today}")
+    except ImportError:
+        pass
+    except Exception as e:
+        log("error", f"Governor report generation failed: {e}")
+
+
 def check_config():
     if not BOT_TOKEN or not CHAT_ID:
         log("error", "Set KOAN_TELEGRAM_TOKEN and KOAN_TELEGRAM_CHAT_ID env vars.")
@@ -635,6 +708,12 @@ def main():
                 flush_outbox()
             except Exception as e:
                 log("error", f"flush_outbox failed: {e}")
+
+            # Governor periodic report scheduler
+            try:
+                _check_governor_report()
+            except Exception as e:
+                log("error", f"governor report check failed: {e}")
 
             try:
                 write_heartbeat(str(KOAN_ROOT))
