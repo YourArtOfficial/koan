@@ -399,28 +399,19 @@ cmd_scheduler() {
 
     # Create or update the scheduler job
     local job_name="daily-report-trigger"
+    local scheduler_args=(
+        --location="$REGION" --project="$PROJECT"
+        --schedule="0 8 * * *" --time-zone="Europe/Paris"
+        --uri="${receiver_url}/api/trigger-report" --http-method=POST
+        --oidc-service-account-email="$SERVICE_ACCOUNT"
+        --oidc-token-audience="$receiver_url"
+    )
     if gcloud scheduler jobs describe "$job_name" --location="$REGION" --project="$PROJECT" &>/dev/null; then
         info "Job ${job_name} exists, updating..."
-        run_cmd gcloud scheduler jobs update http "$job_name" \
-            --location="$REGION" \
-            --project="$PROJECT" \
-            --schedule="0 8 * * *" \
-            --time-zone="Europe/Paris" \
-            --uri="${receiver_url}/api/trigger-report" \
-            --http-method=POST \
-            --oidc-service-account-email="$SERVICE_ACCOUNT" \
-            --oidc-token-audience="$receiver_url"
+        run_cmd gcloud scheduler jobs update http "$job_name" "${scheduler_args[@]}"
     else
         info "Creating job ${job_name}..."
-        run_cmd gcloud scheduler jobs create http "$job_name" \
-            --location="$REGION" \
-            --project="$PROJECT" \
-            --schedule="0 8 * * *" \
-            --time-zone="Europe/Paris" \
-            --uri="${receiver_url}/api/trigger-report" \
-            --http-method=POST \
-            --oidc-service-account-email="$SERVICE_ACCOUNT" \
-            --oidc-token-audience="$receiver_url"
+        run_cmd gcloud scheduler jobs create http "$job_name" "${scheduler_args[@]}"
     fi
 
     ok "Cloud Scheduler job '${job_name}' configured (daily at 8:00 CET)"

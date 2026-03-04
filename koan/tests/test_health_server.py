@@ -4,7 +4,7 @@ import json
 import hmac
 import hashlib
 from datetime import date
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -97,23 +97,25 @@ class TestWebhookGitHub:
 
 class TestTriggerReport:
 
-    @patch("app.governor_daily_report.send_daily_report", return_value="Rapport du 2026-03-04\nActivité normale")
-    def test_trigger_report_success(self, mock_report, client):
+    @patch("app.governor_daily_report.send_daily_report", return_value="Rapport du 2026-03-04")
+    @patch("app.governor_daily_report._collect_day_data", return_value={"events_count": 5})
+    def test_trigger_report_success(self, mock_collect, mock_report, client):
         resp = client.post("/api/trigger-report")
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["status"] == "sent"
         assert "date" in data
 
-    @patch("app.governor_daily_report.send_daily_report", return_value="Aucune activité détectée")
-    def test_trigger_report_no_activity(self, mock_report, client):
+    @patch("app.governor_daily_report.send_daily_report", return_value="Rapport vide")
+    @patch("app.governor_daily_report._collect_day_data", return_value={"events_count": 0})
+    def test_trigger_report_no_activity(self, mock_collect, mock_report, client):
         resp = client.post("/api/trigger-report")
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["status"] == "no_activity"
 
-    @patch("app.governor_daily_report.send_daily_report", side_effect=Exception("LLM error"))
-    def test_trigger_report_error(self, mock_report, client):
+    @patch("app.governor_daily_report._collect_day_data", side_effect=Exception("LLM error"))
+    def test_trigger_report_error(self, mock_collect, client):
         resp = client.post("/api/trigger-report")
         assert resp.status_code == 500
         data = resp.get_json()
@@ -126,7 +128,8 @@ class TestTriggerReport:
         assert data["status"] == "error"
 
     @patch("app.governor_daily_report.send_daily_report", return_value="Rapport du 2026-03-03")
-    def test_trigger_report_with_date(self, mock_report, client):
+    @patch("app.governor_daily_report._collect_day_data", return_value={"events_count": 1})
+    def test_trigger_report_with_date(self, mock_collect, mock_report, client):
         resp = client.post("/api/trigger-report?date=2026-03-03")
         assert resp.status_code == 200
         data = resp.get_json()

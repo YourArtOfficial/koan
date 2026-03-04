@@ -31,11 +31,11 @@ def trigger_report():
     """POST /api/trigger-report — generate and send the daily report.
 
     Query params:
-        date: YYYY-MM-DD (optional, defaults to yesterday)
+        date: YYYY-MM-DD (optional, defaults to today UTC)
 
     Returns JSON: {"status": "sent"|"no_activity"|"error", "date": "YYYY-MM-DD"}
     """
-    from app.governor_daily_report import send_daily_report
+    from app.governor_daily_report import send_daily_report, _collect_day_data
 
     date_str = request.args.get("date")
     if date_str:
@@ -47,8 +47,10 @@ def trigger_report():
         target_date = datetime.now(timezone.utc).date()
 
     try:
-        narrative = send_daily_report(target_date=target_date, notify=True)
-        status = "no_activity" if "aucune activité" in narrative.lower() else "sent"
+        data = _collect_day_data(target_date)
+        has_activity = data.get("events_count", 0) > 0
+        send_daily_report(target_date=target_date, notify=True)
+        status = "sent" if has_activity else "no_activity"
         return jsonify({"status": status, "date": target_date.isoformat()})
     except Exception as e:
         logger.exception("Failed to generate daily report")
