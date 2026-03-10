@@ -12,7 +12,7 @@ import logging
 import os
 from datetime import date, datetime, timezone
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,12 +20,13 @@ logging.basicConfig(
 )
 
 from app.health import health_bp
-from app.utils import INSTANCE_DIR
+from app.utils import KOAN_ROOT, INSTANCE_DIR
 from app.watcher.webhook_handler import register_webhooks
 
 logger = logging.getLogger("governor.health_server")
 
-app = Flask(__name__)
+template_dir = os.path.join(KOAN_ROOT, "koan", "templates")
+app = Flask(__name__, template_folder=template_dir)
 app.register_blueprint(health_bp)
 
 register_webhooks(app, INSTANCE_DIR)
@@ -101,6 +102,69 @@ def advisor_scan_status():
     if not progress:
         return jsonify({"status": "idle"})
     return jsonify(progress)
+
+
+@app.route("/governor")
+def governor_page():
+    """Governor dashboard — CEO overview with feed, actions, health."""
+    health = {}
+    try:
+        from app.health import get_health_report
+        health = get_health_report()
+    except Exception:
+        health = {"status": "unknown"}
+
+    events = []
+    try:
+        from app.watcher.journal import read_events
+        events = read_events(INSTANCE_DIR, days=7, limit=20)
+    except Exception:
+        pass
+
+    return render_template("governor.html", health=health, events=events)
+
+
+@app.route("/api/governor/events")
+def api_governor_events():
+    """JSON feed of recent governor events."""
+    limit = request.args.get("limit", 20, type=int)
+    try:
+        from app.watcher.journal import read_events
+        events = read_events(INSTANCE_DIR, days=7, limit=limit)
+        return jsonify({"ok": True, "events": events, "count": len(events)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "events": []})
+
+
+@app.route("/api/governor/action", methods=["POST"])
+def api_governor_action():
+    """Execute a governor action and return the result."""
+    data = request.get_json(silent=True) or {}
+    action = data.get("action", "")
+
+    action_map = {
+        "report_daily": ("report", "daily --notify"),
+        "status": ("status", ""),
+        "advisor_scan": ("advisor", "scan"),
+    }
+
+    if action not in action_map:
+        return jsonify({"ok": False, "error": f"Action inconnue: {action}"})
+
+    command, args = action_map[action]
+    try:
+        from app.governor_cli import dispatch_skill
+        import argparse
+        flags = argparse.Namespace(
+            output_json=False, notify=True, dry_run=False, verbose=False
+        )
+        parts = args.split(None, 1) if args else ["", ""]
+        skill_action = parts[0] if parts else ""
+        extra = parts[1] if len(parts) > 1 else ""
+        exit_code, result = dispatch_skill(command, skill_action, extra, flags)
+        return jsonify({"ok": exit_code == 0, "action": action, "result": result})
+    except Exception as e:
+        return jsonify({"ok": False, "action": action, "error": str(e)})
 
 
 if __name__ == "__main__":
