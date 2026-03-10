@@ -104,6 +104,42 @@ def advisor_scan_status():
     return jsonify(progress)
 
 
+@app.route("/governor/help")
+def governor_help_page():
+    """Governor command help — full reference for all CLI commands."""
+    from app.governor_cli import HELP_COMMANDS, VERSION
+
+    order = [
+        "watcher", "advisor", "scan",
+        "status", "report",
+        "budget", "keys",
+        "vault", "env",
+        "autonomy", "rollout", "offboard",
+        "simulate", "tunnel",
+    ]
+    commands = []
+    for name in order:
+        info = HELP_COMMANDS.get(name)
+        if not info:
+            continue
+        search_parts = [name, info["desc"], info["usage"]]
+        for a_name, a_desc in info["actions"].items():
+            search_parts.extend([a_name, a_desc])
+        for ex in info.get("examples", []):
+            search_parts.append(ex)
+        commands.append({
+            "name": name,
+            "desc": info["desc"],
+            "usage": info["usage"],
+            "actions": list(info["actions"].items()),
+            "flags": info.get("flags", {}),
+            "examples": info.get("examples", []),
+            "search_text": " ".join(search_parts).lower(),
+        })
+
+    return render_template("help_commands.html", commands=commands, version=VERSION)
+
+
 @app.route("/governor")
 def governor_page():
     """Governor dashboard — CEO overview with feed, actions, health."""
